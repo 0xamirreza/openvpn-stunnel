@@ -1,8 +1,29 @@
 #!/bin/bash
 # shellcheck disable=SC1091,SC2164,SC2034,SC1072,SC1073,SC1009
 
-# Secure OpenVPN server installer for Debian, Ubuntu, CentOS, Amazon Linux 2, Fedora, Oracle Linux 8, Arch Linux, Rocky Linux and AlmaLinux.
-# https://github.com/angristan/openvpn-install
+# =============================================================================
+# Enhanced OpenVPN server installer with User Expiration Management
+# =============================================================================
+# 
+# This is a fork of the original OpenVPN installer with additional features:
+# - User certificate expiration management (1-36500 days)
+# - Enhanced user creation with custom expiration dates
+# 
+# Original Project:
+# - Repository: https://github.com/angristan/openvpn-install
+# - Author: angristan
+# - Original README: https://github.com/angristan/openvpn-install/blob/master/README.md
+# 
+# Fork Repository:
+# - Repository: https://github.com/0xamirreza/openvpn-stunnel
+# - Enhanced by: 0xamirreza
+# 
+# =============================================================================
+# 
+# Secure OpenVPN server installer for Debian, Ubuntu, CentOS, Amazon Linux 2, 
+# Fedora, Oracle Linux 8, Arch Linux, Rocky Linux and AlmaLinux.
+# 
+# =============================================================================
 
 function isRoot() {
 	if [ "$EUID" -ne 0 ]; then
@@ -1195,6 +1216,115 @@ function newClient() {
 	exit 0
 }
 
+function newClientWithExpiration() {
+	echo ""
+	echo "Tell me a name for the client."
+	echo "The name must consist of alphanumeric character. It may also include an underscore or a dash."
+
+	until [[ $CLIENT =~ ^[a-zA-Z0-9_-]+$ ]]; do
+		read -rp "Client name: " -e CLIENT
+	done
+
+	echo ""
+	echo "Set the expiration time for this client certificate:"
+	echo "Enter the number of days (e.g., 1, 7, 30, 365)"
+	echo "Default is 3650 days (10 years)"
+	
+	until [[ $CERT_EXPIRE =~ ^[0-9]+$ ]] && [ "$CERT_EXPIRE" -ge 1 ] && [ "$CERT_EXPIRE" -le 36500 ]; do
+		read -rp "Certificate expiration (days) [1-36500]: " -e -i 30 CERT_EXPIRE
+	done
+
+	echo ""
+	echo "Do you want to protect the configuration file with a password?"
+	echo "(e.g. encrypt the private key with a password)"
+	echo "   1) Add a passwordless client"
+	echo "   2) Use a password for the client"
+
+	until [[ $PASS =~ ^[1-2]$ ]]; do
+		read -rp "Select an option [1-2]: " -e -i 1 PASS
+	done
+
+	CLIENTEXISTS=$(tail -n +2 /etc/openvpn/easy-rsa/pki/index.txt | grep -c -E "/CN=$CLIENT\$")
+	if [[ $CLIENTEXISTS == '1' ]]; then
+		echo ""
+		echo "The specified client CN was already found in easy-rsa, please choose another name."
+		exit
+	else
+		cd /etc/openvpn/easy-rsa/ || return
+		case $PASS in
+		1)
+			EASYRSA_CERT_EXPIRE=$CERT_EXPIRE ./easyrsa --batch build-client-full "$CLIENT" nopass
+			;;
+		2)
+			echo "⚠️ You will be asked for the client password below ⚠️"
+			EASYRSA_CERT_EXPIRE=$CERT_EXPIRE ./easyrsa --batch build-client-full "$CLIENT"
+			;;
+		esac
+		echo "Client $CLIENT added with $CERT_EXPIRE days expiration."
+	fi
+
+	# Home directory of the user, where the client configuration will be written
+	if [ -e "/home/${CLIENT}" ]; then
+		# if $1 is a user name
+		homeDir="/home/${CLIENT}"
+	elif [ "${SUDO_USER}" ]; then
+		# if not, use SUDO_USER
+		if [ "${SUDO_USER}" == "root" ]; then
+			# If running sudo as root
+			homeDir="/root"
+		else
+			homeDir="/home/${SUDO_USER}"
+		fi
+	else
+		# if not SUDO_USER, use /root
+		homeDir="/root"
+	fi
+
+	# Determine if we use tls-auth or tls-crypt
+	if grep -qs "^tls-crypt" /etc/openvpn/server.conf; then
+		TLS_SIG="1"
+	elif grep -qs "^tls-auth" /etc/openvpn/server.conf; then
+		TLS_SIG="2"
+	fi
+
+	# Generates the custom client.ovpn
+	cp /etc/openvpn/client-template.txt "$homeDir/$CLIENT.ovpn"
+	{
+		echo "<ca>"
+		cat "/etc/openvpn/easy-rsa/pki/ca.crt"
+		echo "</ca>"
+
+		echo "<cert>"
+		awk '/BEGIN/,/END CERTIFICATE/' "/etc/openvpn/easy-rsa/pki/issued/$CLIENT.crt"
+		echo "</cert>"
+
+		echo "<key>"
+		cat "/etc/openvpn/easy-rsa/pki/private/$CLIENT.key"
+		echo "</key>"
+
+		case $TLS_SIG in
+		1)
+			echo "<tls-crypt>"
+			cat /etc/openvpn/tls-crypt.key
+			echo "</tls-crypt>"
+			;;
+		2)
+			echo "key-direction 1"
+			echo "<tls-auth>"
+			cat /etc/openvpn/tls-auth.key
+			echo "</tls-auth>"
+			;;
+		esac
+	} >>"$homeDir/$CLIENT.ovpn"
+
+	echo ""
+	echo "The configuration file has been written to $homeDir/$CLIENT.ovpn."
+	echo "Download the .ovpn file and import it in your OpenVPN client."
+	echo "Certificate will expire in $CERT_EXPIRE days."
+
+	exit 0
+}
+
 function revokeClient() {
 	NUMBEROFCLIENTS=$(tail -n +2 /etc/openvpn/easy-rsa/pki/index.txt | grep -c "^V")
 	if [[ $NUMBEROFCLIENTS == '0' ]]; then
@@ -1349,11 +1479,12 @@ function manageMenu() {
 	echo ""
 	echo "What do you want to do?"
 	echo "   1) Add a new user"
-	echo "   2) Revoke existing user"
-	echo "   3) Remove OpenVPN"
-	echo "   4) Exit"
-	until [[ $MENU_OPTION =~ ^[1-4]$ ]]; do
-		read -rp "Select an option [1-4]: " MENU_OPTION
+	echo "   2) User Expiration"
+	echo "   3) Revoke existing user"
+	echo "   4) Remove OpenVPN"
+	echo "   5) Exit"
+	until [[ $MENU_OPTION =~ ^[1-5]$ ]]; do
+		read -rp "Select an option [1-5]: " MENU_OPTION
 	done
 
 	case $MENU_OPTION in
@@ -1361,12 +1492,15 @@ function manageMenu() {
 		newClient
 		;;
 	2)
-		revokeClient
+		newClientWithExpiration
 		;;
 	3)
-		removeOpenVPN
+		revokeClient
 		;;
 	4)
+		removeOpenVPN
+		;;
+	5)
 		exit 0
 		;;
 	esac

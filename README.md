@@ -118,8 +118,8 @@ This project has been tested and verified to work with the following configurati
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/openvpn-tunnel-manager.git
-cd openvpn-tunnel-manager
+git clone https://github.com/0xamirreza/openvpn-stunnel.git
+cd openvpn-stunnel
 ```
 
 2. **Run the stunnel manager**:

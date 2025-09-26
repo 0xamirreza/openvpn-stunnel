@@ -6,6 +6,8 @@ A comprehensive VPN tunnel management system that combines OpenVPN with stunnel 
 
 ### Enhanced OpenVPN Installer (`openvpn-install.sh`)
 - **🎯 User Expiration Management**: Create VPN users with custom certificate expiration dates (1-36500 days) - Perfect for temporary access, contractors, or time-limited projects
+- **🔗 IR VPS Integration**: Automatically configures .ovpn files to connect to your IR server with proper protocol settings
+- **⚙️ Smart Configuration**: Auto-fixes `proto tcp-client` to `proto tcp` and updates remote server addresses
 - **Multi-Platform Support**: Debian, Ubuntu, CentOS, Rocky Linux, AlmaLinux, Fedora, Amazon Linux, Oracle Linux, Arch Linux
 - **Advanced Security**: Strong encryption, certificate management, firewall configuration
 - **DNS Options**: Multiple DNS providers including self-hosted Unbound resolver
@@ -103,6 +105,11 @@ This project has been tested and verified to work with the following configurati
 | **Docker Compose** | 1.29.2 | ✅ Tested |
 | **Ubuntu** | 22.04.5 LTS | ✅ Tested |
 
+### Compatibility Notes
+- **Docker 27.5.1**: Full compatibility with containerized stunnel services
+- **Docker Compose 1.29.2**: All compose configurations tested and working
+- **Ubuntu 22.04.5 LTS**: Complete system integration verified
+
 > **Note**: While tested on Ubuntu 22.04.5 LTS, the system should work on other supported Linux distributions. If you encounter issues on different platforms, please report them in the GitHub issues.
 
 ## 🛠️ Installation
@@ -111,8 +118,8 @@ This project has been tested and verified to work with the following configurati
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/0xamirreza/openvpn-stunnel.git
-cd openvpn-stunnel
+git clone https://github.com/yourusername/openvpn-tunnel-manager.git
+cd openvpn-tunnel-manager
 ```
 
 2. **Run the stunnel manager**:
@@ -222,8 +229,14 @@ This system's standout feature is the ability to create VPN users with custom ex
 
 # Select option 2 for "User Expiration"
 # Enter username and expiration days (1-36500)
+# Enter IR VPS domain (e.g., ir.example.com)
 # Example: 30 days for a contractor, 365 days for annual access
 ```
+
+**🔧 Automatic Configuration:**
+- **Protocol Fix**: Automatically changes `proto tcp-client` to `proto tcp`
+- **Domain Update**: Replaces remote server with your IR VPS domain
+- **Ready to Use**: Generated .ovpn file is immediately compatible with your IR server
 
 #### Standard User Creation
 ```bash

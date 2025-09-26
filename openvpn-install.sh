@@ -1235,6 +1235,13 @@ function newClientWithExpiration() {
 	done
 
 	echo ""
+	echo "Enter the IR VPS domain for the client to connect to:"
+	echo "(This will replace the remote server address in the .ovpn file)"
+	until [[ $IR_DOMAIN != "" ]]; do
+		read -rp "IR VPS domain (e.g., ir.example.com): " -e IR_DOMAIN
+	done
+
+	echo ""
 	echo "Do you want to protect the configuration file with a password?"
 	echo "(e.g. encrypt the private key with a password)"
 	echo "   1) Add a passwordless client"
@@ -1316,6 +1323,31 @@ function newClientWithExpiration() {
 			;;
 		esac
 	} >>"$homeDir/$CLIENT.ovpn"
+
+	# Modify the .ovpn file for IR VPS connection
+	echo ""
+	echo "Modifying .ovpn file for IR VPS connection..."
+	
+	# Create a temporary file for modifications
+	temp_file=$(mktemp)
+	
+	# Process the .ovpn file line by line
+	while IFS= read -r line; do
+		if [[ $line == "proto tcp-client" ]]; then
+			echo "proto tcp" >> "$temp_file"
+		elif [[ $line =~ ^remote\ .+\ [0-9]+$ ]]; then
+			echo "remote $IR_DOMAIN 1194" >> "$temp_file"
+		else
+			echo "$line" >> "$temp_file"
+		fi
+	done < "$homeDir/$CLIENT.ovpn"
+	
+	# Replace the original file with the modified version
+	mv "$temp_file" "$homeDir/$CLIENT.ovpn"
+	
+	echo "✅ Modified .ovpn file:"
+	echo "   - Changed 'proto tcp-client' to 'proto tcp'"
+	echo "   - Updated remote server to: $IR_DOMAIN:1194"
 
 	echo ""
 	echo "The configuration file has been written to $homeDir/$CLIENT.ovpn."
